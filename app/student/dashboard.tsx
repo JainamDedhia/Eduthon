@@ -92,7 +92,13 @@ export default function StudentDashboard() {
       <Text style={styles.classCode}>Code: {item.classCode}</Text>
     </View>
   );
-
+if (!user) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Text>Loading user...</Text>
+    </View>
+  );
+}
   return (
     <View style={styles.container}>
       <View style={styles.header}>

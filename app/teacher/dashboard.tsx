@@ -69,14 +69,24 @@ export default function TeacherDashboard() {
   };
 
   const renderClassCard = ({ item }) => (
-    <View style={styles.classCard}>
-      <Text style={styles.className}>{item.className}</Text>
-      <Text style={styles.classCode}>Code: {item.classCode}</Text>
-      <Text style={styles.studentCount}>
-        {item.students?.length || 0} students enrolled
-      </Text>
-    </View>
-  );
+  <View style={styles.classCard}>
+    <Text style={styles.className}>{item.className}</Text>
+    {item.description && (
+      <Text style={styles.classDescription}>{item.description}</Text>
+    )}
+    <Text style={styles.classCode}>Code: {item.classCode}</Text>
+
+    <TouchableOpacity
+      style={[styles.uploadButton, { backgroundColor: "#4A90E2" }]}
+      onPress={() =>
+        router.push(`/teacher/upload-material?classCode=${item.classCode}`)
+      }
+    >
+      <Text style={styles.uploadButtonText}>Upload Material</Text>
+    </TouchableOpacity>
+  </View>
+);
+
 
   return (
     <View style={styles.container}>
@@ -203,4 +213,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  uploadButton: {
+  marginTop: 8,
+  paddingVertical: 10,
+  borderRadius: 6,
+  alignItems: "center",
+},
+uploadButtonText: {
+  color: "#FFF",
+  fontWeight: "600",
+},
+
 });

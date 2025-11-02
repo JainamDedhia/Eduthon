@@ -3,9 +3,10 @@ import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Linking, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { auth, db } from '../../firebaseConfig';
+
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -14,6 +15,13 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  if (!user) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Text>Loading user...</Text>
+    </View>
+  );
+}
   // 🔍 DEBUG: Log user on mount
   useEffect(() => {
     console.log('=== DASHBOARD MOUNTED ===');
@@ -90,15 +98,30 @@ export default function StudentDashboard() {
         <Text style={styles.classDescription}>{item.description}</Text>
       )}
       <Text style={styles.classCode}>Code: {item.classCode}</Text>
+      {item.materials && item.materials.length > 0 && (
+  <View style={{ marginTop: 10 }}>
+    <Text style={{ fontWeight: "bold", marginBottom: 5 }}>Materials:</Text>
+    {item.materials.map((mat, i) => (
+      <TouchableOpacity
+        key={i}
+        onPress={() => Linking.openURL(mat.url)}
+        style={{
+          paddingVertical: 6,
+          paddingHorizontal: 10,
+          backgroundColor: "#E3F2FD",
+          borderRadius: 6,
+          marginBottom: 4,
+        }}
+      >
+        <Text style={{ color: "#1E88E5" }}>{mat.name}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+)}
+
     </View>
   );
-if (!user) {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Loading user...</Text>
-    </View>
-  );
-}
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>

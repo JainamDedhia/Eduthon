@@ -3,9 +3,10 @@ import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, Linking, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Linking, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { auth, db } from '../../firebaseConfig';
+import { downloadMaterial, formatBytes, getStorageUsage, isMaterialDownloaded } from '../../utils/storageService';
 
 
 export default function StudentDashboard() {
@@ -14,6 +15,9 @@ export default function StudentDashboard() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [storageUsage, setStorageUsage] = useState({ used: 0, max: 100 * 1024 * 1024, percentage: 0 });
+  const [downloadingMaterials, setDownloadingMaterials] = useState(new Set());
+  const [downloadedStatus, setDownloadedStatus] = useState({});
 
   if (!user) {
   return (
@@ -28,6 +32,48 @@ export default function StudentDashboard() {
     console.log('User from context:', user);
     console.log('User UID:', user?.uid);
     console.log('========================');
+  }, []);
+
+  // Load storage usage and download status
+  useEffect(() => {
+    const loadStorageInfo = async () => {
+      try {
+        const usage = await getStorageUsage();
+        setStorageUsage(usage);
+        
+        // Check download status for all materials
+        const statusMap = {};
+        for (const classItem of classes) {
+          if (classItem.materials) {
+            for (const mat of classItem.materials) {
+              const isDownloaded = await isMaterialDownloaded(mat.url);
+              statusMap[mat.url] = isDownloaded;
+            }
+          }
+        }
+        setDownloadedStatus(statusMap);
+      } catch (error) {
+        console.error('Error loading storage info:', error);
+      }
+    };
+
+    if (classes.length > 0) {
+      loadStorageInfo();
+    }
+  }, [classes]);
+
+  // Refresh storage usage periodically
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const usage = await getStorageUsage();
+        setStorageUsage(usage);
+      } catch (error) {
+        console.error('Error refreshing storage:', error);
+      }
+    }, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   // 🔥 Real-time listener for classes
@@ -88,7 +134,64 @@ export default function StudentDashboard() {
   const onRefresh = async () => {
     setRefreshing(true);
     // Real-time listener will automatically update, just toggle refreshing state
+    try {
+      const usage = await getStorageUsage();
+      setStorageUsage(usage);
+      
+      // Refresh download status
+      const statusMap = {};
+      for (const classItem of classes) {
+        if (classItem.materials) {
+          for (const mat of classItem.materials) {
+            const isDownloaded = await isMaterialDownloaded(mat.url);
+            statusMap[mat.url] = isDownloaded;
+          }
+        }
+      }
+      setDownloadedStatus(statusMap);
+    } catch (error) {
+      console.error('Error refreshing:', error);
+    }
     setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const handleDownload = async (material, classItem) => {
+    const materialKey = material.url;
+    
+    // Check if already downloaded
+    if (downloadedStatus[materialKey]) {
+      Alert.alert('Already Downloaded', 'This material is already downloaded.');
+      return;
+    }
+
+    // Check if already downloading
+    if (downloadingMaterials.has(materialKey)) {
+      return;
+    }
+
+    setDownloadingMaterials(prev => new Set([...prev, materialKey]));
+
+    try {
+      await downloadMaterial(material, classItem);
+      
+      // Update status
+      setDownloadedStatus(prev => ({ ...prev, [materialKey]: true }));
+      
+      // Refresh storage usage
+      const usage = await getStorageUsage();
+      setStorageUsage(usage);
+      
+      Alert.alert('Success', 'Material downloaded successfully!');
+    } catch (error) {
+      console.error('Download error:', error);
+      Alert.alert('Download Failed', error.message || 'Failed to download material');
+    } finally {
+      setDownloadingMaterials(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(materialKey);
+        return newSet;
+      });
+    }
   };
 
   const renderClassCard = ({ item }) => (
@@ -99,25 +202,47 @@ export default function StudentDashboard() {
       )}
       <Text style={styles.classCode}>Code: {item.classCode}</Text>
       {item.materials && item.materials.length > 0 && (
-  <View style={{ marginTop: 10 }}>
-    <Text style={{ fontWeight: "bold", marginBottom: 5 }}>Materials:</Text>
-    {item.materials.map((mat, i) => (
-      <TouchableOpacity
-        key={i}
-        onPress={() => Linking.openURL(mat.url)}
-        style={{
-          paddingVertical: 6,
-          paddingHorizontal: 10,
-          backgroundColor: "#E3F2FD",
-          borderRadius: 6,
-          marginBottom: 4,
-        }}
-      >
-        <Text style={{ color: "#1E88E5" }}>{mat.name}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-)}
+        <View style={{ marginTop: 10 }}>
+          <Text style={{ fontWeight: "bold", marginBottom: 5 }}>Materials:</Text>
+          {item.materials.map((mat, i) => {
+            const isDownloaded = downloadedStatus[mat.url];
+            const isDownloading = downloadingMaterials.has(mat.url);
+            return (
+              <View key={i} style={styles.materialRow}>
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(mat.url)}
+                  style={[
+                    styles.materialButton,
+                    isDownloaded && styles.materialButtonDownloaded
+                  ]}
+                  disabled={isDownloading}
+                >
+                  <Text style={[styles.materialText, isDownloaded && styles.materialTextDownloaded]}>
+                    {mat.name} {isDownloaded && '✓'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDownload(mat, item)}
+                  style={[
+                    styles.downloadButton,
+                    isDownloaded && styles.downloadButtonDownloaded,
+                    isDownloading && styles.downloadButtonDownloading
+                  ]}
+                  disabled={isDownloading || isDownloaded}
+                >
+                  {isDownloading ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={styles.downloadButtonText}>
+                      {isDownloaded ? '✓' : '⬇'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
     </View>
   );
@@ -125,9 +250,23 @@ export default function StudentDashboard() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>Welcome, Student!</Text>
           <Text style={styles.email}>{user?.email}</Text>
+          <View style={styles.storageIndicator}>
+            <Text style={styles.storageText}>
+              Storage: {formatBytes(storageUsage.used)} / {formatBytes(storageUsage.max)} ({Math.round(storageUsage.percentage)}%)
+            </Text>
+            <View style={styles.storageBar}>
+              <View 
+                style={[
+                  styles.storageBarFill, 
+                  { width: `${Math.min(storageUsage.percentage, 100)}%` },
+                  storageUsage.percentage > 80 && styles.storageBarFillWarning
+                ]} 
+              />
+            </View>
+          </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity 
@@ -289,5 +428,69 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  storageIndicator: {
+    marginTop: 8,
+  },
+  storageText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  storageBar: {
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  storageBarFill: {
+    height: '100%',
+    backgroundColor: '#66BB6A',
+    borderRadius: 2,
+  },
+  storageBarFillWarning: {
+    backgroundColor: '#FFA726',
+  },
+  materialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 8,
+  },
+  materialButton: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "#E3F2FD",
+    borderRadius: 6,
+  },
+  materialButtonDownloaded: {
+    backgroundColor: "#C8E6C9",
+  },
+  materialText: {
+    color: "#1E88E5",
+    fontSize: 14,
+  },
+  materialTextDownloaded: {
+    color: "#2E7D32",
+  },
+  downloadButton: {
+    width: 36,
+    height: 36,
+    backgroundColor: "#4A90E2",
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  downloadButtonDownloaded: {
+    backgroundColor: "#66BB6A",
+  },
+  downloadButtonDownloading: {
+    backgroundColor: "#9E9E9E",
+  },
+  downloadButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

@@ -9,7 +9,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dedhia.gyaansetu",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "This app needs access to save and view downloaded study materials.",
+        "NSCameraUsageDescription": "This app needs access to the camera to scan documents.",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +26,15 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.dedhia.gyaansetu",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",
@@ -38,11 +53,34 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      [
+        "expo-file-system",
+        {
+          "ios": {
+            "UIFileSharingEnabled": true,
+            "LSSupportsOpeningDocumentsInPlace": true
+          }
+        }
+      ],
+      "expo-sqlite",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "58f4bc79-d283-4739-9f9a-c4c2e5d2f118"
+      }
     }
   }
 }
